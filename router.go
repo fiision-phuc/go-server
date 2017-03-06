@@ -21,6 +21,11 @@ func DefaultRouter() *Router {
 }
 
 // GroupRoute generates path's prefix for following urls.
+//
+// @param
+// - s: pointer to current server's instance
+// - pathPrefix:the prefix for url path
+// - handler: the callback func
 func (r *Router) GroupRoute(s *Server, pathPrefix string, handler HandleGroupFunc) {
 	r.groups = append(r.groups, pathPrefix)
 	handler(s)
@@ -28,6 +33,11 @@ func (r *Router) GroupRoute(s *Server, pathPrefix string, handler HandleGroupFun
 }
 
 // BindRoute binds a path with handler.
+//
+// @param
+// - method: the HTTP method
+// - path: the path pattern that can be converted to regex pattern
+// - handler: the callback func to handle context request
 func (r *Router) BindRoute(method string, path string, handler HandleContextFunc) {
 	path = r.mergeGroup(path)
 	logrus.Infof("%-6s -> %s", strings.ToUpper(method), path)
@@ -50,6 +60,10 @@ func (r *Router) BindRoute(method string, path string, handler HandleContextFunc
 }
 
 // MatchRoute matches a route with a path.
+//
+// @param
+// - method: the HTTP method
+// - path: the requested path that will be matched
 func (r *Router) MatchRoute(method string, path string) (*Route, map[string]string) {
 	// Match route
 	for _, route := range r.routes {
@@ -62,7 +76,8 @@ func (r *Router) MatchRoute(method string, path string) (*Route, map[string]stri
 
 // mergeGroup constructs path from multiple parts.
 //
-// - parameter path: final path
+// @param
+// - path: final path
 func (r *Router) mergeGroup(path string) string {
 	if len(r.groups) > 0 {
 		var buffer bytes.Buffer
