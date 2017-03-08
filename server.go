@@ -122,7 +122,7 @@ func (s *Server) RunTLS(certFile string, keyFile string) {
 
 // ServeHTTP handle HTTP request and HTTP response.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer recovery(w, r)
+	defer Recovery(w, r)
 	method := strings.ToLower(r.Method)
 	path := httprouter.CleanPath(r.URL.Path)
 

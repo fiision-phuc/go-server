@@ -15,7 +15,7 @@ import (
 func Test_recovery_development(t *testing.T) {
 	// Setup server & test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer recovery(w, r)
+		defer Recovery(w, r)
 		panic(util.Status404())
 	}))
 	defer ts.Close()
@@ -33,7 +33,7 @@ func Test_recovery_development(t *testing.T) {
 func Test_recovery_production(t *testing.T) {
 	// Setup server & test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer recovery(w, r)
+		defer Recovery(w, r)
 		panic(util.Status404())
 	}))
 	defer ts.Close()
