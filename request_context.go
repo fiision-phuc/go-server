@@ -92,6 +92,15 @@ func (c *RequestContext) BasicAuth() (username string, password string, ok bool)
 }
 
 // BindForm converts urlencode/multipart form to object.
+//
+// Example:
+// type Form struct {
+//     Username string `field:"username" validation:"^\\w+$"`
+//	   Password string `field:"password" validation:"^\\w{8, 32}$"`
+// }
+//
+// form := new(Form)
+// err := c.BindForm(testStruct)
 func (c *RequestContext) BindForm(inputForm interface{}) error {
 	return util.BindForm(c.QueryParams, inputForm)
 }
@@ -150,18 +159,6 @@ func (c *RequestContext) OutputHeader(headerName string, headerValue string) {
 	c.response.Header().Set(headerName, headerValue)
 }
 
-// OutputError returns an error JSON.
-func (c *RequestContext) OutputError(status *util.Status) {
-	if redirectURL := redirectPaths[status.Code]; len(redirectURL) > 0 {
-		c.OutputRedirect(status, redirectURL)
-	} else {
-		c.response.Header().Set("Content-Type", "application/problem+json")
-		c.response.WriteHeader(status.Code)
-		cause, _ := json.Marshal(status)
-		c.response.Write(cause)
-	}
-}
-
 // OutputRedirect returns a redirect instruction.
 func (c *RequestContext) OutputRedirect(status *util.Status, url string) {
 	http.Redirect(c.response, c.request, url, status.Code)
@@ -180,7 +177,19 @@ func (c *RequestContext) OutputHTML(filePath string, model interface{}) {
 	if tmpl, err := template.ParseFiles(filePath); err == nil {
 		tmpl.Execute(c.response, model)
 	} else {
-		c.OutputError(util.Status404())
+		c.OutputStatus(util.Status404())
+	}
+}
+
+// OutputStatus returns an status JSON.
+func (c *RequestContext) OutputStatus(status *util.Status) {
+	if redirectURL := redirectPaths[status.Code]; len(redirectURL) > 0 {
+		c.OutputRedirect(status, redirectURL)
+	} else {
+		c.response.Header().Set("Content-Type", "application/problem+json")
+		c.response.WriteHeader(status.Code)
+		cause, _ := json.Marshal(status)
+		c.response.Write(cause)
 	}
 }
 

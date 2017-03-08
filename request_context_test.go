@@ -226,7 +226,7 @@ func Test_OutputHeader(t *testing.T) {
 		context := CreateContext(w, r)
 
 		context.OutputHeader("test-header", "test-header-value")
-		context.OutputError(util.Status200())
+		context.OutputStatus(util.Status200())
 	}))
 	defer ts.Close()
 
@@ -240,7 +240,7 @@ func Test_OutputError(t *testing.T) {
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		context := CreateContext(w, r)
-		context.OutputError(util.Status400())
+		context.OutputStatus(util.Status400())
 	}))
 	defer ts.Close()
 

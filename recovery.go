@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -40,30 +37,22 @@ func recovery(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			// Generate error report
 			var buffer bytes.Buffer
-			buffer.WriteString(fmt.Sprintf("[%d] %s\n", status.Code, status.Description))
-
-			buffer.WriteString(fmt.Sprintf("%-12s: %s\n", "URI", r.URL.Path))
-			buffer.WriteString(fmt.Sprintf("%-12s: %s\n", "Address", r.RemoteAddr))
-			buffer.WriteString(fmt.Sprintf("%-12s: %s | %s\n", "Method", r.Proto, r.Method))
-			buffer.WriteString(fmt.Sprintf("%-12s: %s\n\n", "Request Time", time.Now().UTC().Format(time.RFC822)))
-
-			// Write request
-			buffer.WriteString(fmt.Sprintf("%-12s: %s\n", "User Agent", r.UserAgent()))
-			buffer.WriteString(fmt.Sprintf("%-12s: %s\n", "Referer", r.Referer()))
+			buffer.WriteString(fmt.Sprintf("[%s][%d] %s\n", time.Now().UTC().Format(time.RFC822), status.Code, status.Description))
+			buffer.WriteString(fmt.Sprintf("%s %s %s\n\n", r.Proto, r.Method, r.URL.Path))
+			buffer.WriteString(fmt.Sprintf("%s: %s\n", "address", r.RemoteAddr))
+			buffer.WriteString(fmt.Sprintf("%s: %s\n\n", "user-agent", r.UserAgent()))
 
 			// Write header
-			idx := 0
+			buffer.WriteString(fmt.Sprintf("%s: %s\n", "referer", r.Referer()))
+			buffer.WriteString(fmt.Sprintf("%s:\n", "header"))
+
 			for header, value := range r.Header {
+				header = strings.ToLower(header)
+
 				if header == "user-agent" || header == "referer" {
 					continue
 				}
-
-				if idx == 0 {
-					buffer.WriteString(fmt.Sprintf("%-12s: [%s] %s\n", "Header", header, value))
-				} else {
-					buffer.WriteString(fmt.Sprintf("%-12s: [%s] %s\n", "", header, value))
-				}
-				idx++
+				buffer.WriteString(fmt.Sprintf("- %s: %s\n", header, value))
 			}
 
 			//			// Write Path Params
@@ -102,61 +91,4 @@ func recovery(w http.ResponseWriter, r *http.Request) {
 			logrus.Warningln(buffer.String())
 		}()
 	}
-}
-
-// callStack writes stack trace.
-func callStack(skip int, w io.Writer) {
-	srcPath := fmt.Sprintf("%s/src", os.Getenv("GOPATH"))
-	paths := strings.Split(srcPath, ":")
-
-	for _, path := range paths {
-		for i := skip; ; i++ {
-			// Condition validation: Stop if there is nothing else
-			pc, file, line, ok := runtime.Caller(i)
-			if !ok {
-				break
-			}
-
-			// Condition validation: Skip go root
-			if !strings.HasPrefix(file, path) {
-				continue
-			}
-
-			// Trim prefix
-			file = file[(len(path) + 4):]
-
-			// Print this much at least. If we can't find the source, it won't show.
-			file = fmt.Sprintf("%s: %s (%d)", file, callFunc(pc), line)
-			io.WriteString(w, file)
-			io.WriteString(w, "\n")
-		}
-	}
-}
-
-// callFunc returns func's name.
-func callFunc(pc uintptr) string {
-	fn := runtime.FuncForPC(pc)
-	if fn == nil {
-		return "???"
-	}
-	name := fn.Name()
-
-	// Eliminate the path prefix
-	if lastslash := strings.LastIndex(name, "/"); lastslash >= 0 {
-		name = name[lastslash+1:]
-	}
-
-	//	// Eliminate period prefix
-	//	if period := strings.Index(name, "."); period >= 0 {
-	//		name = name[period+1:]
-	//	}
-
-	//	// Convert center dot to dot
-	//	name = strings.Replace(name, "·", ".", -1)
-	//	return string(name)
-
-	if tokens := strings.Split(name, "."); len(tokens) >= 2 {
-		return tokens[1]
-	}
-	return "???"
 }
