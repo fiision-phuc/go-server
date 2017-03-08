@@ -12,8 +12,8 @@ import (
 	"github.com/phuc0302/go-server/util"
 )
 
-// recovery recovers server from panic state.
-func recovery(w http.ResponseWriter, r *http.Request) {
+// Recovery recovers server from panic state.
+func Recovery(w http.ResponseWriter, r *http.Request) {
 	if err := recover(); err != nil {
 		var status *util.Status
 		if httpError, ok := err.(*util.Status); ok {
