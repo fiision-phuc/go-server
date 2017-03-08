@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/Sirupsen/logrus"
@@ -12,6 +13,41 @@ import (
 	"github.com/phuc0302/go-server/util"
 )
 
+var (
+	// Global public config's instance.
+	Cfg Config
+
+	// Global internal redirect map.
+	redirectPaths map[int]string
+
+	// HTTP method regex
+	methodsValidation *regexp.Regexp
+)
+
+// HandleGroupFunc defines type alias for group func callback handler.
+type HandleGroupFunc func(*Server)
+
+// HandleContextFunc defines type alias for request context func callback handler.
+type HandleContextFunc func(*RequestContext)
+
+// Adapter defines type alias for HandleContextFunc func decorator.
+//
+// Thank Mat Ryer for instruction on how to implement 'Adapter Pattern'.
+// @link: https://medium.com/@matryer/writing-middleware-in-golang-and-how-go-makes-it-so-much-fun-4375c1246e81#.7g2v827ux
+type Adapter func(HandleContextFunc) HandleContextFunc
+
+// Adapt generates decorator for HandleContextFunc func.
+//
+// Thank Mat Ryer for instruction on how to implement 'Adapter Pattern'.
+// @link: https://medium.com/@matryer/writing-middleware-in-golang-and-how-go-makes-it-so-much-fun-4375c1246e81#.7g2v827ux
+func Adapt(f HandleContextFunc, adapters ...Adapter) HandleContextFunc {
+	for i := len(adapters) - 1; i >= 0; i-- {
+		adapter := adapters[i]
+		f = adapter(f)
+	}
+	return f
+}
+
 // Server describes server object.
 type Server struct {
 	router *Router
@@ -19,7 +55,8 @@ type Server struct {
 
 // CreateServer returns a server with custom components.
 //
-// - parameter sandboxMode: instruct which config file should be loaded
+// @param
+// - sandboxMode: instruct which config file should be loaded
 func CreateServer(sandboxMode bool) *Server {
 	// Load config file
 	if sandboxMode {
@@ -85,7 +122,7 @@ func (s *Server) RunTLS(certFile string, keyFile string) {
 
 // ServeHTTP handle HTTP request and HTTP response.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer Recovery(w, r)
+	defer recovery(w, r)
 	method := strings.ToLower(r.Method)
 	path := httprouter.CleanPath(r.URL.Path)
 
@@ -128,61 +165,109 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // MARK: Server's routing
 // GroupRoute routes all url with same prefix.
+//
+// @param
+// - urlPrefix: the prefix for url path
+// - handler: the callback func
 func (s *Server) GroupRoute(urlPrefix string, handler HandleGroupFunc) {
 	s.router.GroupRoute(s, urlPrefix, handler)
 }
 
 // Copy routes copy request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Copy(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Copy, urlPattern, handler)
 }
 
 // Delete routes delete request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Delete(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Delete, urlPattern, handler)
 }
 
 // Get routes get request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Get(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Get, urlPattern, handler)
 }
 
 // Head routes head request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Head(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Head, urlPattern, handler)
 }
 
 // Link routes link request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Link(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Link, urlPattern, handler)
 }
 
 // Options routes options request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Options(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Options, urlPattern, handler)
 }
 
 // Patch routes patch request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Patch(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Patch, urlPattern, handler)
 }
 
 // Post routes post request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Post(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Post, urlPattern, handler)
 }
 
 // Purge routes purge request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Purge(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Purge, urlPattern, handler)
 }
 
 // Put routes put request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Put(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Put, urlPattern, handler)
 }
 
 // Unlink routes unlink request to registered handler.
+//
+// @param
+// - urlPattern: the path pattern
+// - handler: the callback func to handle context request
 func (s *Server) Unlink(urlPattern string, handler HandleContextFunc) {
 	s.router.BindRoute(Unlink, urlPattern, handler)
 }

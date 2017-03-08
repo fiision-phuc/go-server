@@ -61,6 +61,9 @@ type Config struct {
 }
 
 // CreateConfig generates a default configuration file.
+//
+// @param
+// - configFile: config file's name that will be saved
 func CreateConfig(configFile string) {
 	if util.FileExisted(configFile) {
 		os.Remove(configFile)
@@ -101,6 +104,9 @@ func CreateConfig(configFile string) {
 }
 
 // LoadConfig retrieves previous configuration from file.
+//
+// @param
+// - configFile: config file's name that will be loaded
 func LoadConfig(configFile string) Config {
 	// Generate config file if neccessary
 	if !util.FileExisted(configFile) {
