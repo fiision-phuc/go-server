@@ -15,35 +15,29 @@ type Router struct {
 	routes []*Route
 }
 
-// DefaultRouter creates new router component.
-func DefaultRouter() *Router {
-	return new(Router)
-}
-
-// GroupRoute generates path's prefix for following urls.
+// GroupRoute generates path's prefix for following URLs.
 //
 // @param
-// - s: pointer to current server's instance
-// - pathPrefix:the prefix for url path
-// - handler: the callback func
-func (r *Router) GroupRoute(s *Server, pathPrefix string, handler HandleGroupFunc) {
-	r.groups = append(r.groups, pathPrefix)
-	handler(s)
+// - prefixURI {string} (the prefix for url)
+// - handler {HandleGroupFunc} (the callback func)
+func (r *Router) GroupRoute(prefixURI string, handler HandleGroupFunc) {
+	r.groups = append(r.groups, prefixURI)
+	handler()
 	r.groups = r.groups[:len(r.groups)-1]
 }
 
-// BindRoute binds a path with handler.
+// BindRoute binds a patternURL with handler.
 //
 // @param
-// - method: the HTTP method
-// - path: the path pattern that can be converted to regex pattern
-// - handler: the callback func to handle context request
-func (r *Router) BindRoute(method string, path string, handler HandleContextFunc) {
-	path = r.mergeGroup(path)
-	logrus.Infof("%-6s -> %s", strings.ToUpper(method), path)
+// - method {string} (HTTP request method)
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func (r *Router) BindRoute(method string, patternURL string, handler HandleContextFunc) {
+	patternURL = r.mergeGroup(patternURL)
+	logrus.Infof("%-6s -> %s", strings.ToUpper(method), patternURL)
 
 	// Define regex pattern
-	regexPattern := util.ConvertPath(path)
+	regexPattern := util.ConvertPath(patternURL)
 
 	// Look for existing one before create new
 	for _, route := range r.routes {
@@ -59,36 +53,42 @@ func (r *Router) BindRoute(method string, path string, handler HandleContextFunc
 	r.routes = append(r.routes, newRoute)
 }
 
-// MatchRoute matches a route with a path.
+// MatchRoute matches a route with a pathURL.
 //
 // @param
-// - method: the HTTP method
-// - path: the requested path that will be matched
-func (r *Router) MatchRoute(method string, path string) (*Route, map[string]string) {
-	// Match route
+// - method {string} (HTTP request method)
+// - pathURL {string} (request's path that will be matched)
+//
+// @return
+// - route {Route} (a route that lead to request's handler, might be null if it is not yet defined)
+// - pathParams {map[string]string} (a path params, might be null if there is no route)
+func (r *Router) MatchRoute(method string, pathURL string) (*Route, map[string]string) {
 	for _, route := range r.routes {
-		if ok, pathParams := route.Match(method, path); ok {
+		if ok, pathParams := route.Match(method, pathURL); ok {
 			return route, pathParams
 		}
 	}
 	return nil, nil
 }
 
-// mergeGroup constructs path from multiple parts.
+// mergeGroup merges multiple prefixURIs into single prefixURI.
 //
 // @param
-// - path: final path
-func (r *Router) mergeGroup(path string) string {
+// - patternURL {string} (the URL matching pattern)
+//
+// @return
+// - patternURL {string} (the URL matching pattern)
+func (r *Router) mergeGroup(patternURL string) string {
 	if len(r.groups) > 0 {
 		var buffer bytes.Buffer
-		for _, path := range r.groups {
-			buffer.WriteString(path)
+		for _, prefixURI := range r.groups {
+			buffer.WriteString(prefixURI)
 		}
 
-		if len(path) > 0 {
-			buffer.WriteString(path)
+		if len(patternURL) > 0 {
+			buffer.WriteString(patternURL)
 		}
-		path = buffer.String()
+		patternURL = buffer.String()
 	}
-	return httprouter.CleanPath(path)
+	return httprouter.CleanPath(patternURL)
 }

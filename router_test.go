@@ -12,8 +12,8 @@ import (
 )
 
 func Test_GroupRoute(t *testing.T) {
-	router := DefaultRouter()
-	router.GroupRoute(nil, "/user/profile", func(s *Server) {
+	router := new(Router)
+	router.GroupRoute("/user/profile", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 		router.BindRoute(Post, "/{profileID}", func(request *RequestContext) {})
@@ -48,7 +48,7 @@ func Test_GroupRoute(t *testing.T) {
 }
 
 func Test_BindRoute(t *testing.T) {
-	router := DefaultRouter()
+	router := new(Router)
 
 	// [Test 1] First bind
 	router.BindRoute(Get, "/", func(c *RequestContext) {})
@@ -65,14 +65,14 @@ func Test_BindRoute(t *testing.T) {
 
 func Test_MatchRoute_InvalidPath(t *testing.T) {
 	// Setup router
-	router := DefaultRouter()
+	router := new(Router)
 	router.BindRoute(Get, "/", func(request *RequestContext) {})
-	router.GroupRoute(nil, "/user/profile(.htm[l]?)?", func(s *Server) {
+	router.GroupRoute("/user/profile(.htm[l]?)?", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Post, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 	})
-	router.GroupRoute(nil, "/private", func(s *Server) {
+	router.GroupRoute("/private", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 	})
@@ -96,13 +96,13 @@ func Test_MatchRoute_InvalidPath(t *testing.T) {
 
 func Test_MatchRoute_InvalidHTTPMethod(t *testing.T) {
 	// Setup router
-	router := DefaultRouter()
+	router := new(Router)
 	router.BindRoute(Get, "/", func(request *RequestContext) {})
-	router.GroupRoute(nil, "/user/profile(.htm[l]?)?", func(s *Server) {
+	router.GroupRoute("/user/profile(.htm[l]?)?", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 	})
-	router.GroupRoute(nil, "/private", func(s *Server) {
+	router.GroupRoute("/private", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 	})
@@ -126,14 +126,14 @@ func Test_MatchRoute_InvalidHTTPMethod(t *testing.T) {
 
 func Test_MatchRoute_ValidHTTPMethodAndPath(t *testing.T) {
 	// Setup router
-	router := DefaultRouter()
+	router := new(Router)
 	router.BindRoute(Get, "/", func(request *RequestContext) {})
-	router.GroupRoute(nil, "/user/profile(.htm[l]?)?", func(s *Server) {
+	router.GroupRoute("/user/profile(.htm[l]?)?", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Post, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 	})
-	router.GroupRoute(nil, "/private", func(s *Server) {
+	router.GroupRoute("/private", func() {
 		router.BindRoute(Get, "", func(request *RequestContext) {})
 		router.BindRoute(Get, "/{profileID}", func(request *RequestContext) {})
 	})

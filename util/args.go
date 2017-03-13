@@ -8,10 +8,11 @@ import (
 )
 
 // ReadArgs reads arguments from console input.
-func ReadArgs() (sandboxMode bool, tlsMode bool, keyFile string, certFile string, shouldContinue bool) {
+func ReadArgs() (sandboxMode bool, tlsMode bool, port int, keyFile string, certFile string, shouldContinue bool) {
 	shouldContinue = true
 	sandboxMode = true
 	tlsMode = false
+	port = 8080
 	keyFile = ""
 	certFile = ""
 
@@ -27,8 +28,10 @@ func ReadArgs() (sandboxMode bool, tlsMode bool, keyFile string, certFile string
 				info := map[string]string{
 					"--sandboxMode": "[true|false]",
 					"--tlsMode":     "[true|false]",
+					"--port":        "Port's number that server will listen on.",
 					"--keyFile":     "path to server's private key file.",
 					"--certFile":    "path to server's X.509 certificate.",
+					"--configFile":  "path to server's configuration file.",
 				}
 
 				var buffer bytes.Buffer
@@ -45,6 +48,11 @@ func ReadArgs() (sandboxMode bool, tlsMode bool, keyFile string, certFile string
 			case "--tlsMode":
 				if flag, err := strconv.ParseBool(args[i+1]); err == nil {
 					tlsMode = flag
+				}
+
+			case "--port":
+				if number, err := strconv.ParseInt(args[i+1], 10, 32); err == nil {
+					port = int(number)
 				}
 
 			case "--certFile":
