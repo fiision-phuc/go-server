@@ -8,35 +8,52 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/johntdyer/slackrus"
 	"github.com/julienschmidt/httprouter"
 	"github.com/phuc0302/go-server/util"
 )
 
 var (
-	// Global public config's instance.
-	Cfg Config
+	// Cfg references to public config's instance.
+	Cfg *Config
 
-	// Global internal redirect map.
+	// router references to router's instance.
+	router *Router
+
+	// redirectPaths references to HTTP status redirect instructions.
 	redirectPaths map[int]string
-
-	// HTTP method regex
-	methodsValidation *regexp.Regexp
 )
 
 // HandleGroupFunc defines type alias for group func callback handler.
-type HandleGroupFunc func(*Server)
+type HandleGroupFunc func()
 
 // HandleContextFunc defines type alias for request context func callback handler.
+//
+// @param
+// - context {RequestContext} (a RequestContext's instance, will be created by router)
 type HandleContextFunc func(*RequestContext)
 
 // Adapter defines type alias for HandleContextFunc func decorator.
+//
+// @param
+// - func {HandleContextFunc} (an implementation of HandleContextFunc)
+//
+// @return
+// - func {HandleContextFunc} (a wrapper func to handle before & after events before an actual func)
+//
 //
 // Thank Mat Ryer for instruction on how to implement 'Adapter Pattern'.
 // @link: https://medium.com/@matryer/writing-middleware-in-golang-and-how-go-makes-it-so-much-fun-4375c1246e81#.7g2v827ux
 type Adapter func(HandleContextFunc) HandleContextFunc
 
 // Adapt generates decorator for HandleContextFunc func.
+//
+// @param
+// - f {HandleContextFunc} (an implementation of HandleContextFunc)
+// - adapters {Adapter} (a list of adapter func that user wish to be executed before an actual func)
+//
+// @return
+// - func {HandleContextFunc} (a wrapper func to handle before & after events before an actual func in revert order of adapters)
+//
 //
 // Thank Mat Ryer for instruction on how to implement 'Adapter Pattern'.
 // @link: https://medium.com/@matryer/writing-middleware-in-golang-and-how-go-makes-it-so-much-fun-4375c1246e81#.7g2v827ux
@@ -48,226 +65,218 @@ func Adapt(f HandleContextFunc, adapters ...Adapter) HandleContextFunc {
 	return f
 }
 
-// Server describes server object.
-type Server struct {
-	router *Router
-}
-
-// CreateServer returns a server with custom components.
+// Initialize will init server either in sandbox mode or production mode.
 //
 // @param
-// - sandboxMode: instruct which config file should be loaded
-func CreateServer(sandboxMode bool) *Server {
+// - sandboxMode {bool} (instruction in which config file should be loaded)
+func Initialize(sandboxMode bool) {
 	// Load config file
 	if sandboxMode {
-		fmt.Println("Server is in sandboxMode.")
-		Cfg = LoadConfig(debug)
+		Cfg = LoadConfig(Debug)
 	} else {
-		fmt.Println("Server is in productionMode.")
-		Cfg = LoadConfig(release)
+		Cfg = LoadConfig(Release)
 	}
-
-	// Setup logger
-	level, err := logrus.ParseLevel(Cfg.LogLevel)
-	if err != nil {
-		level = logrus.DebugLevel
-	}
-	logrus.SetFormatter(&logrus.TextFormatter{})
-	logrus.SetOutput(os.Stderr)
-	logrus.SetLevel(level)
-
-	// Setup slack notification if neccessary
-	if len(Cfg.SlackURL) > 0 {
-		logrus.AddHook(&slackrus.SlackrusHook{
-			HookURL:        Cfg.SlackURL,
-			Channel:        Cfg.SlackChannel,
-			Username:       Cfg.SlackUser,
-			IconEmoji:      Cfg.SlackIcon,
-			AcceptedLevels: slackrus.LevelThreshold(level),
-		})
-	}
-
-	// Create server
-	server := Server{router: new(Router)}
-	return &server
+	router = new(Router)
 }
 
-// Run will start server on http port.
-func (s *Server) Run() {
-	address := fmt.Sprintf("%s:%d", Cfg.Host, Cfg.Port)
+// Run will start HTTP server.
+func Run() {
+	address := generateAddress()
 	server := &http.Server{
 		Addr:           address,
 		ReadTimeout:    Cfg.ReadTimeout,
 		WriteTimeout:   Cfg.WriteTimeout,
 		MaxHeaderBytes: Cfg.HeaderSize,
-		Handler:        s,
+		Handler:        serveHTTP(),
 	}
 	logrus.Infof("listening on %s", address)
 	logrus.Fatal(server.ListenAndServe())
 }
 
-// RunTLS will start server on https port.
-func (s *Server) RunTLS(certFile string, keyFile string) {
-	address := fmt.Sprintf("%s:%d", Cfg.Host, Cfg.TLSPort)
+// RunTLS will start HTTPS server.
+func RunTLS(certFile string, keyFile string) {
+	if sslPath := util.GetEnv(util.SSLPath); len(sslPath) > 0 {
+		certFile = fmt.Sprintf("%s/%s", sslPath, certFile)
+		keyFile = fmt.Sprintf("%s/%s", sslPath, keyFile)
+	}
+
+	address := generateAddress()
 	server := &http.Server{
 		Addr:           address,
 		ReadTimeout:    Cfg.ReadTimeout,
 		WriteTimeout:   Cfg.WriteTimeout,
 		MaxHeaderBytes: Cfg.HeaderSize,
-		Handler:        s,
+		Handler:        serveHTTP(),
 	}
 	logrus.Infof("listening on %s\n", address)
 	logrus.Fatal(server.ListenAndServeTLS(certFile, keyFile))
 }
 
-// ServeHTTP handle HTTP request and HTTP response.
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	defer Recovery(w, r)
-	method := strings.ToLower(r.Method)
-	path := httprouter.CleanPath(r.URL.Path)
+// GroupRoute routes all URLs with same prefixURI.
+//
+// @param
+// - prefixURI {string} (the prefix for url)
+// - handler {HandleGroupFunc} (the callback func)
+func GroupRoute(prefixURI string, handler HandleGroupFunc) {
+	router.GroupRoute(prefixURI, handler)
+}
 
-	/* Condition validation: validate request method */
-	if !methodsValidation.MatchString(method) {
-		panic(util.Status405())
-	}
+// BindCopy routes copy request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindCopy(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Copy, patternURL, handler)
+}
 
-	// Find route to handle request
-	if route, pathParams := s.router.MatchRoute(method, path); route != nil {
-		context := CreateContext(w, r)
-		if pathParams != nil {
-			context.PathParams = pathParams
-		}
-		route.InvokeHandlers(context)
+// BindDelete routes delete request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindDelete(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Delete, patternURL, handler)
+}
+
+// BindGet routes get request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindGet(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Get, patternURL, handler)
+}
+
+// BindHead routes head request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindHead(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Head, patternURL, handler)
+}
+
+// BindLink routes link request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindLink(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Link, patternURL, handler)
+}
+
+// BindOptions routes options request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindOptions(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Options, patternURL, handler)
+}
+
+// BindPatch routes patch request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindPatch(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Patch, patternURL, handler)
+}
+
+// BindPost routes post request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindPost(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Post, patternURL, handler)
+}
+
+// BindPurge routes purge request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindPurge(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Purge, patternURL, handler)
+}
+
+// BindPut routes put request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindPut(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Put, patternURL, handler)
+}
+
+// BindUnlink routes unlink request to registered handler.
+//
+// @param
+// - patternURL {string} (the URL matching pattern)
+// - handler {HandleContextFunc} (the callback func)
+func BindUnlink(patternURL string, handler HandleContextFunc) {
+	router.BindRoute(Unlink, patternURL, handler)
+}
+
+// generateAddress returns a string represent a domain and port that the server will listen on.
+//
+// @return
+// - address {string} (the domain:port that server will listen on)
+func generateAddress() (address string) {
+	if port := util.GetEnv(util.Port); len(port) > 0 {
+		address = fmt.Sprintf("%s:%s", Cfg.Host, port)
 	} else {
-		if len(Cfg.StaticFolders) > 0 && method == Get {
-			for prefix, folder := range Cfg.StaticFolders {
+		address = fmt.Sprintf("%s:%d", Cfg.Host, Cfg.Port)
+	}
+	return
+}
 
-				if strings.HasPrefix(path, prefix) {
-					path = strings.Replace(path, prefix, folder, 1)
+// serveHTTP returns an implementation for http.Handler.
+//
+// @return
+// - handler {http.Handler} (the http.Handler implementation)
+func serveHTTP() http.Handler {
+	methodsValidation := regexp.MustCompile(fmt.Sprintf("^(%s)$", strings.Join(Cfg.AllowMethods, "|")))
 
-					if file, err := os.Open(path); err == nil {
-						defer file.Close()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer Recovery(w, r)
+		method := strings.ToLower(r.Method)
+		path := httprouter.CleanPath(r.URL.Path)
 
-						if info, _ := file.Stat(); !info.IsDir() {
-							http.ServeContent(w, r, path, info.ModTime(), file)
-							return
+		/* Condition validation: validate request method */
+		if !methodsValidation.MatchString(method) {
+			panic(util.Status405())
+		}
+
+		// Find route to handle request
+		if route, pathParams := router.MatchRoute(method, path); route != nil {
+			context := CreateContext(w, r)
+			if pathParams != nil {
+				context.PathParams = pathParams
+			}
+			route.InvokeHandler(context)
+		} else {
+			if len(Cfg.StaticFolders) > 0 && method == Get {
+				for prefix, folder := range Cfg.StaticFolders {
+
+					if strings.HasPrefix(path, prefix) {
+						path = strings.Replace(path, prefix, folder, 1)
+
+						if file, err := os.Open(path); err == nil {
+							defer file.Close()
+
+							if info, _ := file.Stat(); !info.IsDir() {
+								http.ServeContent(w, r, path, info.ModTime(), file)
+								return
+							}
 						}
+						panic(util.Status404())
 					}
-
-					panic(util.Status404())
-					return
 				}
 			}
+			panic(util.Status503())
 		}
-		panic(util.Status503())
-	}
-}
-
-// MARK: Server's routing
-// GroupRoute routes all url with same prefix.
-//
-// @param
-// - urlPrefix: the prefix for url path
-// - handler: the callback func
-func (s *Server) GroupRoute(urlPrefix string, handler HandleGroupFunc) {
-	s.router.GroupRoute(s, urlPrefix, handler)
-}
-
-// Copy routes copy request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Copy(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Copy, urlPattern, handler)
-}
-
-// Delete routes delete request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Delete(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Delete, urlPattern, handler)
-}
-
-// Get routes get request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Get(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Get, urlPattern, handler)
-}
-
-// Head routes head request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Head(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Head, urlPattern, handler)
-}
-
-// Link routes link request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Link(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Link, urlPattern, handler)
-}
-
-// Options routes options request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Options(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Options, urlPattern, handler)
-}
-
-// Patch routes patch request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Patch(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Patch, urlPattern, handler)
-}
-
-// Post routes post request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Post(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Post, urlPattern, handler)
-}
-
-// Purge routes purge request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Purge(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Purge, urlPattern, handler)
-}
-
-// Put routes put request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Put(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Put, urlPattern, handler)
-}
-
-// Unlink routes unlink request to registered handler.
-//
-// @param
-// - urlPattern: the path pattern
-// - handler: the callback func to handle context request
-func (s *Server) Unlink(urlPattern string, handler HandleContextFunc) {
-	s.router.BindRoute(Unlink, urlPattern, handler)
+	})
 }

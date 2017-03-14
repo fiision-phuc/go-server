@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -114,6 +115,9 @@ func Test_CreateRequestContext_PostFormRequestWithData(t *testing.T) {
 }
 
 func Test_CreateRequestContext_PostMultipartRequest(t *testing.T) {
+	defer os.Remove(Debug)
+	Cfg = LoadConfig(Debug)
+
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		context := CreateContext(w, r)
@@ -134,6 +138,9 @@ func Test_CreateRequestContext_PostMultipartRequest(t *testing.T) {
 }
 
 func Test_CreateRequestContext_PostMultipartRequestWithData(t *testing.T) {
+	defer os.Remove(Debug)
+	Cfg = LoadConfig(Debug)
+
 	// Create test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		context := CreateContext(w, r)
@@ -253,23 +260,6 @@ func Test_OutputError(t *testing.T) {
 		if string(bytes) != "{\"status\":400,\"error\":\"Bad Request\",\"error_description\":\"Bad Request\"}" {
 			t.Errorf(expectedFormat.StringButFoundString, "{\"status\":400,\"error\":\"Bad Request\",\"error_description\":\"Bad Request\"}", string(bytes))
 		}
-	}
-}
-
-func Test_OutputRedirect(t *testing.T) {
-	// Create test server
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		context := CreateContext(w, r)
-		context.OutputRedirect(util.Status301(), "https://www.google.com")
-	}))
-	defer ts.Close()
-
-	response, _ := http.Post(ts.URL, "application/x-www-form-urlencoded", nil)
-	if response.StatusCode != 301 {
-		t.Errorf(expectedFormat.NumberButFoundNumber, 301, response.StatusCode)
-	}
-	if response.Header.Get("Location") != "https://www.google.com" {
-		t.Errorf(expectedFormat.StringButFoundString, "https://www.google.com", response.Header.Get("Location"))
 	}
 }
 

@@ -62,7 +62,7 @@ func Test_invokeHandlers(t *testing.T) {
 	route.BindHandler(Get, func(request *RequestContext) {
 		panic("Test if func had been invoked or not.")
 	})
-	route.InvokeHandlers(nil)
+	route.InvokeHandler(nil)
 	t.Errorf(expectedFormat.Panic)
 }
 

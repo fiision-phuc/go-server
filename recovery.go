@@ -83,10 +83,6 @@ func Recovery(w http.ResponseWriter, r *http.Request) {
 			//				}
 			//			}
 
-			//			// Write stack trace
-			//			buffer.WriteString("\nStack Trace:\n")
-			//			callStack(3, &buffer)
-
 			// Log error
 			logrus.Warningln(buffer.String())
 		}()

@@ -2,6 +2,12 @@ package util
 
 import "os"
 
+const (
+	ConfigPath = "CONFIG_PATH"
+	SSLPath    = "SSL_PATH"
+	Port       = "PORT"
+)
+
 // GetEnv retrieves value from environment.
 func GetEnv(key string) string {
 	if len(key) == 0 {

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -15,16 +14,15 @@ import (
 )
 
 func Test_ServeHTTP_InvalidResource(t *testing.T) {
-	defer os.Remove(debug)
+	defer os.Remove(Debug)
+	Initialize(true)
 
-	// Setup server & test server
-	server := CreateServer(true)
-	server.Get("/sample", func(c *RequestContext) {
+	// Setup test server
+	BindGet("/sample", func(c *RequestContext) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.ServeHTTP(w, r)
-	}))
+
+	ts := httptest.NewServer(serveHTTP())
 	defer ts.Close()
 
 	response, _ := http.Get(fmt.Sprintf("%s/%s", ts.URL, "resources/README"))
@@ -34,16 +32,15 @@ func Test_ServeHTTP_InvalidResource(t *testing.T) {
 }
 
 func Test_ServeHTTP_ValidResource(t *testing.T) {
-	defer os.Remove(debug)
+	defer os.Remove(Debug)
+	Initialize(true)
 
-	// Setup server & test server
-	server := CreateServer(true)
-	server.Get("/sample", func(c *RequestContext) {
+	// Setup test server
+	BindGet("/sample", func(c *RequestContext) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.ServeHTTP(w, r)
-	}))
+
+	ts := httptest.NewServer(serveHTTP())
 	defer ts.Close()
 
 	response, _ := http.Get(fmt.Sprintf("%s/%s", ts.URL, "resources/LICENSE"))
@@ -53,21 +50,19 @@ func Test_ServeHTTP_ValidResource(t *testing.T) {
 }
 
 func Test_ServeHTTP_InvalidHTTPMethod(t *testing.T) {
-	defer os.Remove(debug)
-
-	// Setup server & test server
-	server := CreateServer(true)
-	server.Get("/sample", func(c *RequestContext) {
-		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
-	})
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.ServeHTTP(w, r)
-	}))
-	defer ts.Close()
+	defer os.Remove(Debug)
+	Initialize(true)
 
 	// Update allow methods
 	Cfg.AllowMethods = []string{Get, Post, Patch, Delete}
-	methodsValidation = regexp.MustCompile(fmt.Sprintf("^(%s)$", strings.Join(Cfg.AllowMethods, "|")))
+
+	// Setup test server
+	BindGet("/sample", func(c *RequestContext) {
+		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
+	})
+
+	ts := httptest.NewServer(serveHTTP())
+	defer ts.Close()
 
 	request, _ := http.NewRequest("LINK", fmt.Sprintf("%s/%s", ts.URL, "token"), nil)
 	response, _ := http.DefaultClient.Do(request)
@@ -77,16 +72,15 @@ func Test_ServeHTTP_InvalidHTTPMethod(t *testing.T) {
 }
 
 func Test_ServeHTTP_InvalidURL(t *testing.T) {
-	defer os.Remove(debug)
+	defer os.Remove(Debug)
+	Initialize(true)
 
-	// Setup server & test server
-	server := CreateServer(true)
-	server.Get("/sample", func(c *RequestContext) {
+	// Setup test server
+	BindGet("/sample", func(c *RequestContext) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.ServeHTTP(w, r)
-	}))
+
+	ts := httptest.NewServer(serveHTTP())
 	defer ts.Close()
 
 	request, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s", ts.URL, "sample"), strings.NewReader(""))
@@ -99,16 +93,15 @@ func Test_ServeHTTP_InvalidURL(t *testing.T) {
 }
 
 func Test_ServeHTTP_ValidURL(t *testing.T) {
-	defer os.Remove(debug)
+	defer os.Remove(Debug)
+	Initialize(true)
 
-	// Setup server & test server
-	server := CreateServer(true)
-	server.Get("/sample", func(c *RequestContext) {
+	// Setup test server
+	BindGet("/sample", func(c *RequestContext) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.ServeHTTP(w, r)
-	}))
+
+	ts := httptest.NewServer(serveHTTP())
 	defer ts.Close()
 
 	response, _ := http.Get(fmt.Sprintf("%s/%s", ts.URL, "sample"))

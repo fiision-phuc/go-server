@@ -11,17 +11,17 @@ import (
 )
 
 func Test_CreateConfig(t *testing.T) {
-	defer os.Remove(debug)
-	CreateConfig(debug)
+	defer os.Remove(Debug)
+	CreateConfig(Debug)
 
-	if !util.FileExisted(debug) {
-		t.Errorf("Expected %s file had been created but found nil.", debug)
+	if !util.FileExisted(Debug) {
+		t.Errorf("Expected %s file had been created but found nil.", Debug)
 	}
 }
 
 func Test_LoadConfig(t *testing.T) {
-	defer os.Remove(debug)
-	config := LoadConfig(debug)
+	defer os.Remove(Debug)
+	config := LoadConfig(Debug)
 
 	// Validate basic information
 	if config.Host != "localhost" {
@@ -29,9 +29,6 @@ func Test_LoadConfig(t *testing.T) {
 	}
 	if config.Port != 8080 {
 		t.Errorf(expectedFormat.NumberButFoundNumber, 8080, config.Port)
-	}
-	if config.TLSPort != 8443 {
-		t.Errorf(expectedFormat.NumberButFoundNumber, 8443, config.TLSPort)
 	}
 	if config.HeaderSize != 5120 {
 		t.Errorf(expectedFormat.NumberButFoundNumber, 5120, config.HeaderSize)
@@ -47,13 +44,6 @@ func Test_LoadConfig(t *testing.T) {
 	allowMethods := []string{Copy, Delete, Get, Head, Link, Options, Patch, Post, Purge, Put, Unlink}
 	if !reflect.DeepEqual(allowMethods, config.AllowMethods) {
 		t.Errorf(expectedFormat.StringButFoundString, allowMethods, config.AllowMethods)
-	}
-	if methodsValidation == nil {
-		t.Error(expectedFormat.NotNil)
-	} else {
-		if !methodsValidation.MatchString(Copy) {
-			t.Errorf(expectedFormat.BoolButFoundBool, true, methodsValidation.MatchString(Copy))
-		}
 	}
 
 	// Validate redirect paths
@@ -71,5 +61,33 @@ func Test_LoadConfig(t *testing.T) {
 	}
 	if !reflect.DeepEqual(staticFolders, config.StaticFolders) {
 		t.Errorf(expectedFormat.StringButFoundString, staticFolders, config.StaticFolders)
+	}
+}
+
+func Test_Extensions(t *testing.T) {
+	defer os.Remove(Debug)
+	config := LoadConfig(Debug)
+
+	if config.GetExtension("key") != nil {
+		t.Error(expectedFormat.Nil)
+	}
+
+	if _, ok := config.GetExtension("key").(string); ok {
+		t.Error(expectedFormat.Nil)
+	}
+
+	config.SetExtension("key", "value")
+	if config.GetExtension("key") == nil {
+		t.Error(expectedFormat.NotNil)
+	} else {
+		value := config.GetExtension("key")
+		if v, ok := value.(string); ok {
+			if v != "value" {
+				t.Errorf(expectedFormat.StringButFoundString, "value", v)
+			}
+		} else {
+			t.Errorf("Invalid value")
+		}
+		config.Save(Debug)
 	}
 }

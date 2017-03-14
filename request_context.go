@@ -56,7 +56,6 @@ func CreateContext(response http.ResponseWriter, request *http.Request) *Request
 
 	case Get:
 		params = request.URL.Query()
-		break
 
 	case Patch, Post:
 		if contentType := context.Header["content-type"]; contentType == "application/x-www-form-urlencoded" {
@@ -68,7 +67,6 @@ func CreateContext(response http.ResponseWriter, request *http.Request) *Request
 				params = request.MultipartForm.Value
 			}
 		}
-		break
 
 	default:
 		break

@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
+	"github.com/johntdyer/slackrus"
 	"github.com/phuc0302/go-server/util"
 )
 
 // Config file's name.
 const (
-	debug   = "server.debug.cfg"
-	release = "server.release.cfg"
+	Debug   = "server.debug.cfg"
+	Release = "server.release.cfg"
 )
 
 // HTTP Methods.
@@ -37,9 +37,8 @@ const (
 // Config describes a configuration object that will be used during application life time.
 type Config struct {
 	// Server
-	Host    string `json:"host"`
-	Port    int    `json:"port"`
-	TLSPort int    `json:"tls_port"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
 
 	// Header
 	HeaderSize    int           `json:"header_size"`    // In KB
@@ -47,40 +46,42 @@ type Config struct {
 	ReadTimeout   time.Duration `json:"timeout_read"`   // In seconds
 	WriteTimeout  time.Duration `json:"timeout_write"`  // In seconds
 
-	// HTTP Method
-	AllowMethods  []string          `json:"allow_methods"`
-	RedirectPaths map[string]string `json:"redirect_paths"`
-	StaticFolders map[string]string `json:"static_folders"`
-
 	// Log
 	LogLevel     string `json:"log_level"`
 	SlackURL     string `json:"slack_url"`
 	SlackIcon    string `json:"slack_icon"`
 	SlackUser    string `json:"slack_user"`
 	SlackChannel string `json:"slack_channel"`
+
+	// HTTP Method
+	AllowMethods  []string          `json:"allow_methods"`
+	RedirectPaths map[string]string `json:"redirect_paths"`
+	StaticFolders map[string]string `json:"static_folders"`
+
+	// Extensions
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
 }
 
 // CreateConfig generates a default configuration file.
 //
 // @param
-// - configFile: config file's name that will be saved
+// - configFile {string} (a file's path that will be used to generate configuration file)
 func CreateConfig(configFile string) {
-	if util.FileExisted(configFile) {
-		os.Remove(configFile)
-	}
-
 	// Create default config
-	config := Config{
-		Host:    "localhost",
-		Port:    8080,
-		TLSPort: 8443,
+	config := &Config{
+		Host:          "localhost",
+		Port:          8080,
+		HeaderSize:    (5 << 10),
+		MultipartSize: (1 << 20),
+		ReadTimeout:   (15 * time.Second),
+		WriteTimeout:  (15 * time.Second),
+		LogLevel:      "debug",
+		SlackURL:      "",
+		SlackIcon:     ":ghost:",
+		SlackUser:     "Server",
+		SlackChannel:  "#channel",
+		AllowMethods:  []string{Copy, Delete, Get, Head, Link, Options, Patch, Post, Purge, Put, Unlink},
 
-		HeaderSize:    5,
-		MultipartSize: 1,
-		ReadTimeout:   15,
-		WriteTimeout:  15,
-
-		AllowMethods: []string{Copy, Delete, Get, Head, Link, Options, Patch, Post, Purge, Put, Unlink},
 		RedirectPaths: map[string]string{
 			"401": "/login",
 		},
@@ -88,53 +89,141 @@ func CreateConfig(configFile string) {
 			"/assets":    "assets",
 			"/resources": "resources",
 		},
-
-		LogLevel:     "debug",
-		SlackURL:     "",
-		SlackIcon:    ":ghost:",
-		SlackUser:    "Server",
-		SlackChannel: "#channel",
 	}
 
 	// Create new file
-	configJSON, _ := json.MarshalIndent(config, "", "  ")
-	file, _ := os.Create(configFile)
-	file.Write(configJSON)
-	file.Close()
+	config.Save(configFile)
 }
 
-// LoadConfig retrieves previous configuration from file.
+// LoadConfig will load pre-generated configuration file into memory for later used.
 //
 // @param
-// - configFile: config file's name that will be loaded
-func LoadConfig(configFile string) Config {
-	// Generate config file if neccessary
-	if !util.FileExisted(configFile) {
-		CreateConfig(configFile)
+// - configFile {string} (a file's path that will be used to load pre-generated configuration file)
+//
+// @return
+// - config {Config} (an instance of server's configuration)
+func LoadConfig(configFile string) *Config {
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 {
+		finalPath := fmt.Sprintf("%s/%s", configPath, configFile)
+		if !util.FileExisted(finalPath) {
+			CreateConfig(configFile)
+		}
+		configFile = finalPath
+	} else {
+		if !util.FileExisted(configFile) {
+			CreateConfig(configFile)
+		}
 	}
+
+	file, _ := os.Open(configFile)
+	defer file.Close()
 
 	// Load config file
-	config := Config{}
-	file, _ := os.Open(configFile)
+	var config Config
 	bytes, _ := ioutil.ReadAll(file)
 
-	if err := json.Unmarshal(bytes, &config); err == nil {
-		// Convert duration to seconds
-		config.HeaderSize <<= 10
-		config.MultipartSize <<= 20
-		config.ReadTimeout *= time.Second
-		config.WriteTimeout *= time.Second
-
-		// Define redirectPaths
-		redirectPaths = make(map[int]string, len(config.RedirectPaths))
-		for s, path := range config.RedirectPaths {
-			if status, err := strconv.Atoi(s); err == nil {
-				redirectPaths[status] = path
-			}
-		}
-
-		// Define regular expressions
-		methodsValidation = regexp.MustCompile(fmt.Sprintf("^(%s)$", strings.Join(config.AllowMethods, "|")))
+	if err := json.Unmarshal(bytes, &config); err != nil {
+		fmt.Println("Could not load config file at: ", configFile)
+		os.Exit(1)
 	}
-	return config
+
+	// Convert duration to seconds
+	config.HeaderSize <<= 10
+	config.MultipartSize <<= 20
+	config.ReadTimeout *= time.Second
+	config.WriteTimeout *= time.Second
+
+	// Define redirectPaths
+	redirectPaths = make(map[int]string, len(config.RedirectPaths))
+	for s, path := range config.RedirectPaths {
+		if status, err := strconv.Atoi(s); err == nil {
+			redirectPaths[status] = path
+		}
+	}
+
+	// Setup logger
+	level, err := logrus.ParseLevel(config.LogLevel)
+	if err != nil {
+		level = logrus.DebugLevel
+	}
+	logrus.SetFormatter(&logrus.TextFormatter{})
+	logrus.SetOutput(os.Stderr)
+	logrus.SetLevel(level)
+
+	// Setup slack notification if neccessary
+	if len(config.SlackURL) > 0 {
+		logrus.AddHook(&slackrus.SlackrusHook{
+			HookURL:        config.SlackURL,
+			Channel:        config.SlackChannel,
+			Username:       config.SlackUser,
+			IconEmoji:      config.SlackIcon,
+			AcceptedLevels: slackrus.LevelThreshold(level),
+		})
+	}
+
+	// Return config's instance
+	return &config
+}
+
+// Save will create new configuration file, override if necessary.
+//
+// @param
+// - configFile {string} (a file's path that will be used to generate configuration file)
+func (c *Config) Save(configFile string) {
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 {
+		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
+	}
+	if util.FileExisted(configFile) {
+		os.Remove(configFile)
+	}
+
+	// Revert changed
+	c.HeaderSize >>= 10
+	c.MultipartSize >>= 20
+	c.ReadTimeout /= time.Second
+	c.WriteTimeout /= time.Second
+
+	// Create new file
+	configJSON, _ := json.MarshalIndent(c, "", "  ")
+	file, _ := os.Create(configFile)
+	defer file.Close()
+
+	file.Write(configJSON)
+
+	// Revert changed
+	c.HeaderSize <<= 10
+	c.MultipartSize <<= 20
+	c.ReadTimeout *= time.Second
+	c.WriteTimeout *= time.Second
+}
+
+// GetExtension returns extension data that had been associated with input key.
+//
+// @param
+// - key {string} (an input key to retrieve associated extension data)
+//
+// @return
+// - value {interface} (a generic data that had been associated with input key or null)
+func (c *Config) GetExtension(key string) interface{} {
+	if c.Extensions == nil {
+		return nil
+	}
+	return c.Extensions[key]
+}
+
+// SetExtension extends server's default configuration.
+//
+// @param
+// - key {string} (an input key that will be associated with extension value)
+// - value {interface} (a generic data that will be associated with input key)
+func (c *Config) SetExtension(key string, value interface{}) {
+	/* Condition validation: validate input */
+	if len(key) == 0 || value == nil {
+		return
+	}
+
+	if c.Extensions == nil {
+		c.Extensions = make(map[string]interface{})
+	}
+	c.Extensions[key] = value
 }

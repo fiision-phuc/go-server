@@ -2,7 +2,7 @@ package server
 
 import "regexp"
 
-// Route describes a route component.
+// Route describes a route component implementation.
 type Route struct {
 	regex    *regexp.Regexp
 	handlers map[string]HandleContextFunc
@@ -11,33 +11,41 @@ type Route struct {
 // DefaultRoute creates new route component.
 //
 // @param
-// - regexPattern: a raw path that had been converted to regex pattern
-func DefaultRoute(regexPattern string) *Route {
+// - patternURL {string} (the URL matching pattern)
+//
+// @return
+// - route {Route} (a Route's new instance)
+func DefaultRoute(patternURL string) *Route {
 	route := &Route{
-		regex:    regexp.MustCompile(regexPattern),
+		regex:    regexp.MustCompile(patternURL),
 		handlers: make(map[string]HandleContextFunc),
 	}
 	return route
 }
 
-// BindHandler binds handler with specific http method.
+// BindHandler binds HTTP request method with handler.
 //
 // @param
-// - method: the HTTP method
-// - handler: the callback func to handle context request
+// - method {string} (HTTP request method)
+// - handler {HandleContextFunc} (the callback func)
 func (r *Route) BindHandler(method string, handler HandleContextFunc) {
 	/* Condition validation: only accept function */
 	if handler == nil {
-		panic("Request handlers must not be nil.")
+		panic("Request handler must not be nil.")
+	}
+
+	/* Condition validation: only accept if there is none associated handler */
+	if r.handlers[method] != nil {
+		panic("This HTTP request method had been associated with another handler.")
 	}
 	r.handlers[method] = handler
 }
 
-// InvokeHandlers invokes handlers.
+// InvokeHandler invokes handler.
 //
 // @param
-// - c: the request context
-func (r *Route) InvokeHandlers(c *RequestContext) {
+// - c {RequestContext} (the request context)
+func (r *Route) InvokeHandler(c *RequestContext) {
 	handler := r.handlers[c.Method]
 	handler(c)
 }
@@ -45,10 +53,14 @@ func (r *Route) InvokeHandlers(c *RequestContext) {
 // Match matchs request path against route's regex pattern.
 //
 // @param
-// - method: the HTTP method
-// - path: path from url request
-func (r *Route) Match(method string, path string) (bool, map[string]string) {
-	if matches := r.regex.FindStringSubmatch(path); len(matches) > 0 && matches[0] == path {
+// - method {string} (HTTP request method)
+// - pathURL {string} (request's path that will be matched)
+//
+// @return
+// - flag {bool} (indicate flag if it is a matched or not)
+// - pathParams {map[string]string} (a path params)
+func (r *Route) Match(method string, pathURL string) (bool, map[string]string) {
+	if matches := r.regex.FindStringSubmatch(pathURL); len(matches) > 0 && matches[0] == pathURL {
 		if handler := r.handlers[method]; handler != nil {
 
 			// Find path params if there is any
