@@ -5,16 +5,20 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/julienschmidt/httprouter"
 )
 
 // ReadArgs reads arguments from console input.
-func ReadArgs() (sandboxMode bool, tlsMode bool, port int, keyFile string, certFile string, shouldContinue bool) {
+//
+// @return
+// - tlsMode {bool} (enable SSL mode or not)
+// - sandboxMode {bool} (enable sandbox mode or not)
+// - shouldContinue {bool} (indicate that application should continue or not)
+func ReadArgs() (sandboxMode bool, tlsMode bool, shouldContinue bool) {
 	shouldContinue = true
 	sandboxMode = true
 	tlsMode = false
-	port = 8080
-	keyFile = ""
-	certFile = ""
 
 	args := os.Args[1:]
 	l := len(args)
@@ -29,9 +33,8 @@ func ReadArgs() (sandboxMode bool, tlsMode bool, port int, keyFile string, certF
 					"--sandboxMode": "[true|false]",
 					"--tlsMode":     "[true|false]",
 					"--port":        "Port's number that server will listen on.",
-					"--keyFile":     "path to server's private key file.",
-					"--certFile":    "path to server's X.509 certificate.",
-					"--configFile":  "path to server's configuration file.",
+					"--configPath":  "path to server's configuration file.",
+					"--sslPath":     "path to server's X.509 certificate & private key.",
 				}
 
 				var buffer bytes.Buffer
@@ -39,36 +42,65 @@ func ReadArgs() (sandboxMode bool, tlsMode bool, port int, keyFile string, certF
 					buffer.WriteString(fmt.Sprintf("%-15s%s\n", k, v))
 				}
 				fmt.Println(buffer.String())
+				os.Exit(0)
 
 			case "--sandboxMode":
-				if flag, err := strconv.ParseBool(args[i+1]); err == nil {
-					sandboxMode = flag
+				if i+1 < l {
+					if flag, err := strconv.ParseBool(args[i+1]); err == nil {
+						sandboxMode = flag
+					}
 				}
 
 			case "--tlsMode":
-				if flag, err := strconv.ParseBool(args[i+1]); err == nil {
-					tlsMode = flag
+				if i+1 < l {
+					if flag, err := strconv.ParseBool(args[i+1]); err == nil {
+						tlsMode = flag
+					}
 				}
 
 			case "--port":
-				if number, err := strconv.ParseInt(args[i+1], 10, 32); err == nil {
-					port = int(number)
+				if i+1 < l {
+					if number, err := strconv.Atoi(args[i+1]); err == nil {
+						SetEnv(Port, fmt.Sprintf("%d", number))
+					}
 				}
 
-			case "--certFile":
-				if FileExisted(args[i+1]) {
-					certFile = args[i+1]
+			case "--configPath":
+				if i+1 < l {
+					dirPath := formatPath(args[i+1])
+					if DirExisted(dirPath) {
+						SetEnv(ConfigPath, dirPath)
+					}
 				}
 
-			case "--keyFile":
-				if FileExisted(args[i+1]) {
-					keyFile = args[i+1]
+			case "--sslPath":
+				if i+1 < l {
+					dirPath := formatPath(args[i+1])
+					if DirExisted(dirPath) {
+						SetEnv(SSLPath, dirPath)
+					}
 				}
 
 			default:
 				break
 			}
 		}
+	}
+	return
+}
+
+// formatPath formats input path and remove trail slash if there is any.
+//
+// @param
+// - input {string} (input directory path)
+//
+// @return
+// - output {string} (path to directory as expected)
+func formatPath(input string) (output string) {
+	output = httprouter.CleanPath(input)
+
+	if output[(len(output)-1):] == "/" {
+		output = output[:(len(output) - 1)]
 	}
 	return
 }

@@ -71,10 +71,10 @@ func CreateConfig(configFile string) {
 	config := &Config{
 		Host:          "localhost",
 		Port:          8080,
-		HeaderSize:    5,
-		MultipartSize: 1,
-		ReadTimeout:   15,
-		WriteTimeout:  15,
+		HeaderSize:    (5 << 10),
+		MultipartSize: (1 << 20),
+		ReadTimeout:   (15 * time.Second),
+		WriteTimeout:  (15 * time.Second),
 		LogLevel:      "debug",
 		SlackURL:      "",
 		SlackIcon:     ":ghost:",
@@ -103,10 +103,18 @@ func CreateConfig(configFile string) {
 // @return
 // - config {Config} (an instance of server's configuration)
 func LoadConfig(configFile string) *Config {
-	// Generate config file if neccessary
-	if !util.FileExisted(configFile) {
-		CreateConfig(configFile)
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 {
+		finalPath := fmt.Sprintf("%s/%s", configPath, configFile)
+		if !util.FileExisted(finalPath) {
+			CreateConfig(configFile)
+		}
+		configFile = finalPath
+	} else {
+		if !util.FileExisted(configFile) {
+			CreateConfig(configFile)
+		}
 	}
+
 	file, _ := os.Open(configFile)
 	defer file.Close()
 
@@ -162,9 +170,18 @@ func LoadConfig(configFile string) *Config {
 // @param
 // - configFile {string} (a file's path that will be used to generate configuration file)
 func (c *Config) Save(configFile string) {
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 {
+		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
+	}
 	if util.FileExisted(configFile) {
 		os.Remove(configFile)
 	}
+
+	// Revert changed
+	c.HeaderSize >>= 10
+	c.MultipartSize >>= 20
+	c.ReadTimeout /= time.Second
+	c.WriteTimeout /= time.Second
 
 	// Create new file
 	configJSON, _ := json.MarshalIndent(c, "", "  ")
@@ -172,6 +189,12 @@ func (c *Config) Save(configFile string) {
 	defer file.Close()
 
 	file.Write(configJSON)
+
+	// Revert changed
+	c.HeaderSize <<= 10
+	c.MultipartSize <<= 20
+	c.ReadTimeout *= time.Second
+	c.WriteTimeout *= time.Second
 }
 
 // GetExtension returns extension data that had been associated with input key.

@@ -81,7 +81,7 @@ func Initialize(sandboxMode bool) {
 
 // Run will start HTTP server.
 func Run() {
-	address := fmt.Sprintf("%s:%d", Cfg.Host, Cfg.Port)
+	address := generateAddress()
 	server := &http.Server{
 		Addr:           address,
 		ReadTimeout:    Cfg.ReadTimeout,
@@ -95,7 +95,12 @@ func Run() {
 
 // RunTLS will start HTTPS server.
 func RunTLS(certFile string, keyFile string) {
-	address := fmt.Sprintf("%s:%d", Cfg.Host, Cfg.Port)
+	if sslPath := util.GetEnv(util.SSLPath); len(sslPath) > 0 {
+		certFile = fmt.Sprintf("%s/%s", sslPath, certFile)
+		keyFile = fmt.Sprintf("%s/%s", sslPath, keyFile)
+	}
+
+	address := generateAddress()
 	server := &http.Server{
 		Addr:           address,
 		ReadTimeout:    Cfg.ReadTimeout,
@@ -213,6 +218,19 @@ func BindPut(patternURL string, handler HandleContextFunc) {
 // - handler {HandleContextFunc} (the callback func)
 func BindUnlink(patternURL string, handler HandleContextFunc) {
 	router.BindRoute(Unlink, patternURL, handler)
+}
+
+// generateAddress returns a string represent a domain and port that the server will listen on.
+//
+// @return
+// - address {string} (the domain:port that server will listen on)
+func generateAddress() (address string) {
+	if port := util.GetEnv(util.Port); len(port) > 0 {
+		address = fmt.Sprintf("%s:%s", Cfg.Host, port)
+	} else {
+		address = fmt.Sprintf("%s:%d", Cfg.Host, Cfg.Port)
+	}
+	return
 }
 
 // serveHTTP returns an implementation for http.Handler.
