@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -60,6 +61,9 @@ type Config struct {
 
 	// Extensions
 	Extensions map[string]interface{} `json:"extensions,omitempty"`
+
+	// File's path
+	configPath string
 }
 
 // CreateConfig generates a default configuration file.
@@ -67,6 +71,10 @@ type Config struct {
 // @param
 // - configFile {string} (a file's path that will be used to generate configuration file)
 func CreateConfig(configFile string) {
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 && strings.HasPrefix(configFile, configPath) {
+		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
+	}
+
 	// Create default config
 	config := &Config{
 		Host:          "localhost",
@@ -89,10 +97,12 @@ func CreateConfig(configFile string) {
 			"/assets":    "assets",
 			"/resources": "resources",
 		},
+
+		configPath: configFile,
 	}
 
 	// Create new file
-	config.Save(configFile)
+	config.Save()
 }
 
 // LoadConfig will load pre-generated configuration file into memory for later used.
@@ -103,16 +113,14 @@ func CreateConfig(configFile string) {
 // @return
 // - config {Config} (an instance of server's configuration)
 func LoadConfig(configFile string) *Config {
-	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 {
-		finalPath := fmt.Sprintf("%s/%s", configPath, configFile)
-		if !util.FileExisted(finalPath) {
-			CreateConfig(configFile)
-		}
-		configFile = finalPath
-	} else {
-		if !util.FileExisted(configFile) {
-			CreateConfig(configFile)
-		}
+	// Append file's path if necessary
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 && strings.HasPrefix(configFile, configPath) {
+		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
+	}
+
+	// Check if config file is available or not
+	if !util.FileExisted(configFile) {
+		CreateConfig(configFile)
 	}
 
 	file, _ := os.Open(configFile)
@@ -126,6 +134,7 @@ func LoadConfig(configFile string) *Config {
 		fmt.Println("Could not load config file at: ", configFile)
 		os.Exit(1)
 	}
+	config.configPath = configFile
 
 	// Convert duration to seconds
 	config.HeaderSize <<= 10
@@ -166,15 +175,9 @@ func LoadConfig(configFile string) *Config {
 }
 
 // Save will create new configuration file, override if necessary.
-//
-// @param
-// - configFile {string} (a file's path that will be used to generate configuration file)
-func (c *Config) Save(configFile string) {
-	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 {
-		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
-	}
-	if util.FileExisted(configFile) {
-		os.Remove(configFile)
+func (c *Config) Save() {
+	if util.FileExisted(c.configPath) {
+		os.Remove(c.configPath)
 	}
 
 	// Revert changed
@@ -184,10 +187,10 @@ func (c *Config) Save(configFile string) {
 	c.WriteTimeout /= time.Second
 
 	// Create new file
-	configJSON, _ := json.MarshalIndent(c, "", "  ")
-	file, _ := os.Create(configFile)
+	file, _ := os.Create(c.configPath)
 	defer file.Close()
 
+	configJSON, _ := json.MarshalIndent(c, "", "  ")
 	file.Write(configJSON)
 
 	// Revert changed
