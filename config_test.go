@@ -88,6 +88,6 @@ func Test_Extensions(t *testing.T) {
 		} else {
 			t.Errorf("Invalid value")
 		}
-		config.Save(Debug)
+		config.Save()
 	}
 }
