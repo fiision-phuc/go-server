@@ -71,7 +71,7 @@ type Config struct {
 // @param
 // - configFile {string} (a file's path that will be used to generate configuration file)
 func CreateConfig(configFile string) {
-	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 && strings.HasPrefix(configFile, configPath) {
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 && !strings.HasPrefix(configFile, configPath) {
 		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
 	}
 
@@ -114,7 +114,7 @@ func CreateConfig(configFile string) {
 // - config {Config} (an instance of server's configuration)
 func LoadConfig(configFile string) *Config {
 	// Append file's path if necessary
-	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 && strings.HasPrefix(configFile, configPath) {
+	if configPath := util.GetEnv(util.ConfigPath); len(configPath) > 0 && !strings.HasPrefix(configFile, configPath) {
 		configFile = fmt.Sprintf("%s/%s", configPath, configFile)
 	}
 
