@@ -37,10 +37,11 @@ func Recovery(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			// Generate error report
 			var buffer bytes.Buffer
-			buffer.WriteString(fmt.Sprintf("[%s][%d] %s\n", time.Now().UTC().Format(time.RFC822), status.Code, status.Description))
-			buffer.WriteString(fmt.Sprintf("%s %s %s\n\n", r.Proto, r.Method, r.URL.Path))
+			buffer.WriteString(fmt.Sprintf("\n[%s][%d] %s\n", time.Now().UTC().Format(time.RFC822), status.Code, status.Description))
+			buffer.WriteString(fmt.Sprintf("%s %s %s\n", r.Proto, r.Method, r.URL.Path))
+
+			buffer.WriteString(fmt.Sprintf("%s: %s\n", "user-agent", r.UserAgent()))
 			buffer.WriteString(fmt.Sprintf("%s: %s\n", "address", r.RemoteAddr))
-			buffer.WriteString(fmt.Sprintf("%s: %s\n\n", "user-agent", r.UserAgent()))
 
 			// Write header
 			buffer.WriteString(fmt.Sprintf("%s: %s\n", "referer", r.Referer()))
