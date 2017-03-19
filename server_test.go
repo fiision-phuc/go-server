@@ -22,7 +22,7 @@ func Test_ServeHTTP_InvalidResource(t *testing.T) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
 
-	ts := httptest.NewServer(serveHTTP())
+	ts := httptest.NewServer(ServeHTTP())
 	defer ts.Close()
 
 	response, _ := http.Get(fmt.Sprintf("%s/%s", ts.URL, "resources/README"))
@@ -40,7 +40,7 @@ func Test_ServeHTTP_ValidResource(t *testing.T) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
 
-	ts := httptest.NewServer(serveHTTP())
+	ts := httptest.NewServer(ServeHTTP())
 	defer ts.Close()
 
 	response, _ := http.Get(fmt.Sprintf("%s/%s", ts.URL, "resources/LICENSE"))
@@ -61,7 +61,7 @@ func Test_ServeHTTP_InvalidHTTPMethod(t *testing.T) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
 
-	ts := httptest.NewServer(serveHTTP())
+	ts := httptest.NewServer(ServeHTTP())
 	defer ts.Close()
 
 	request, _ := http.NewRequest("LINK", fmt.Sprintf("%s/%s", ts.URL, "token"), nil)
@@ -80,7 +80,7 @@ func Test_ServeHTTP_InvalidURL(t *testing.T) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
 
-	ts := httptest.NewServer(serveHTTP())
+	ts := httptest.NewServer(ServeHTTP())
 	defer ts.Close()
 
 	request, _ := http.NewRequest("POST", fmt.Sprintf("%s/%s", ts.URL, "sample"), strings.NewReader(""))
@@ -101,7 +101,7 @@ func Test_ServeHTTP_ValidURL(t *testing.T) {
 		c.OutputJSON(util.Status200(), map[string]string{"apple": "apple"})
 	})
 
-	ts := httptest.NewServer(serveHTTP())
+	ts := httptest.NewServer(ServeHTTP())
 	defer ts.Close()
 
 	response, _ := http.Get(fmt.Sprintf("%s/%s", ts.URL, "sample"))
