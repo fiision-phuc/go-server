@@ -87,7 +87,7 @@ func Run() {
 		ReadTimeout:    Cfg.ReadTimeout,
 		WriteTimeout:   Cfg.WriteTimeout,
 		MaxHeaderBytes: Cfg.HeaderSize,
-		Handler:        serveHTTP(),
+		Handler:        ServeHTTP(),
 	}
 	logrus.Infof("listening on %s", address)
 	logrus.Fatal(server.ListenAndServe())
@@ -106,7 +106,7 @@ func RunTLS(certFile string, keyFile string) {
 		ReadTimeout:    Cfg.ReadTimeout,
 		WriteTimeout:   Cfg.WriteTimeout,
 		MaxHeaderBytes: Cfg.HeaderSize,
-		Handler:        serveHTTP(),
+		Handler:        ServeHTTP(),
 	}
 	logrus.Infof("listening on %s\n", address)
 	logrus.Fatal(server.ListenAndServeTLS(certFile, keyFile))
@@ -233,11 +233,11 @@ func generateAddress() (address string) {
 	return
 }
 
-// serveHTTP returns an implementation for http.Handler.
+// ServeHTTP returns an implementation for http.Handler.
 //
 // @return
 // - handler {http.Handler} (the http.Handler implementation)
-func serveHTTP() http.Handler {
+func ServeHTTP() http.Handler {
 	methodsValidation := regexp.MustCompile(fmt.Sprintf("^(%s)$", strings.Join(Cfg.AllowMethods, "|")))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
