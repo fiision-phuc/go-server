@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/sha1"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
@@ -104,16 +106,23 @@ func (c *RequestContext) BindForm(inputForm interface{}) error {
 }
 
 // BindJSON converts json data to object.
-func (c *RequestContext) BindJSON(jsonObject interface{}) error {
+//
+// @param
+// - jsonObject {interface} (an associated JSON object model)
+//
+// @return
+// - fingerprint {string} (a hex string represents data's hash)
+// - err {error} (error message during parse process)
+func (c *RequestContext) BindJSON(jsonObject interface{}) (fingerprint string, err error) {
+	/* Condition validation: validate read process */
 	bytes, err := ioutil.ReadAll(c.request.Body)
-
-	/* Condition validation: Validate parse process */
 	if err != nil {
-		return err
+		return
 	}
 
+	fingerprint = fmt.Sprintf("%x", sha1.Sum(bytes))
 	err = json.Unmarshal(bytes, jsonObject)
-	return err
+	return
 }
 
 // MultipartFile returns an uploaded file by name.
