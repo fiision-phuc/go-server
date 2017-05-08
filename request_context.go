@@ -91,6 +91,13 @@ func (c *RequestContext) BasicAuth() (username string, password string, ok bool)
 	return
 }
 
+// Raw returns raw request & response.
+func (c *RequestContext) Raw() (w http.ResponseWriter, r *http.Request) {
+	w = c.response
+	r = c.request
+	return
+}
+
 // BindForm converts urlencode/multipart form to object.
 //
 // Example:
